@@ -21,6 +21,7 @@
 
 import argparse
 import concurrent.futures
+from io import BytesIO
 import logging
 import queue
 import re
@@ -45,6 +46,7 @@ from pmtiles.writer import Writer as PMTileWriter
 from pySmartDL import SmartDL
 from shapely.geometry import shape
 from shapely.ops import unary_union
+from osm_fieldwork.boundary_handler_factory import BoundaryHandlerFactory
 
 from osm_fieldwork.sqlite import DataFile, MapTile
 from osm_fieldwork.xlsforms import xlsforms_path
@@ -125,7 +127,7 @@ class BaseMapper(object):
 
     def __init__(
         self,
-        boundary: str,
+        boundary: Union[str, BytesIO],
         base: str,
         source: str,
         xy: bool,
@@ -133,7 +135,7 @@ class BaseMapper(object):
         """Create an tile basemap for ODK Collect.
 
         Args:
-            boundary (str): A BBOX string or GeoJSON file of the AOI.
+            boundary (Union[str, BytesIO]): A BBOX string or GeoJSON provided as BytesIO object of the AOI.
                 The GeoJSON can contain multiple geometries.
             base (str): The base directory to cache map tile in
             source (str): The upstream data source for map tiles
@@ -142,7 +144,8 @@ class BaseMapper(object):
         Returns:
             (BaseMapper): An instance of this class
         """
-        self.bbox = self.makeBbox(boundary)
+        bbox_factory = BoundaryHandlerFactory(boundary)
+        self.bbox = bbox_factory.get_bounding_box()
         self.tiles = list()
         self.base = base
         # sources for imagery
@@ -270,66 +273,6 @@ class BaseMapper(object):
             log.debug("%s doesn't exists" % filespec)
             return False
 
-    def makeBbox(
-        self,
-        boundary: str,
-    ) -> tuple[float, float, float, float]:
-        """Make a bounding box from a shapely geometry.
-
-        Args:
-            boundary (str): A BBOX string or GeoJSON file of the AOI.
-                The GeoJSON can contain multiple geometries.
-
-        Returns:
-            (list): The bounding box coordinates
-        """
-        if not boundary.lower().endswith((".json", ".geojson")):
-            # Is BBOX string
-            try:
-                if "," in boundary:
-                    bbox_parts = boundary.split(",")
-                else:
-                    bbox_parts = boundary.split(" ")
-                bbox = tuple(float(x) for x in bbox_parts)
-                if len(bbox) == 4:
-                    # BBOX valid
-                    return bbox
-                else:
-                    msg = f"BBOX string malformed: {bbox}"
-                    log.error(msg)
-                    raise ValueError(msg) from None
-            except Exception as e:
-                log.error(e)
-                msg = f"Failed to parse BBOX string: {boundary}"
-                log.error(msg)
-                raise ValueError(msg) from None
-
-        log.debug(f"Reading geojson file: {boundary}")
-        with open(boundary, "r") as f:
-            poly = geojson.load(f)
-        if "features" in poly:
-            geometry = shape(poly["features"][0]["geometry"])
-        elif "geometry" in poly:
-            geometry = shape(poly["geometry"])
-        else:
-            geometry = shape(poly)
-
-        if isinstance(geometry, list):
-            # Multiple geometries
-            log.debug("Creating union of multiple bbox geoms")
-            geometry = unary_union(geometry)
-
-        if geometry.is_empty:
-            msg = f"No bbox extracted from {geometry}"
-            log.error(msg)
-            raise ValueError(msg) from None
-
-        bbox = geometry.bounds
-        # left, bottom, right, top
-        # minX, minY, maxX, maxY
-        return bbox
-
-
 def tileid_from_y_tile(filepath: Union[Path | str]):
     """Helper function to get the tile id from a tile in z/x/y directory structure.
 
@@ -420,7 +363,7 @@ def create_basemap_file(
 
     Args:
         verbose (bool, optional): Enable verbose output if True.
-        boundary (str, optional): The boundary for the area you want.
+        boundary (str | BytesIO, optional): The boundary for the area you want.
         tms (str, optional): Custom TMS URL.
         xy (bool, optional): Swap the X & Y coordinates when using a
             custom TMS if True.
@@ -456,7 +399,7 @@ def create_basemap_file(
 
     # Validation
     if not boundary:
-        err = "You need to specify a boundary! (file or bbox)"
+        err = "You need to specify a boundary! (in-memory object or bbox)"
         log.error(err)
         raise ValueError(err)
 
@@ -576,7 +519,9 @@ def main():
             log.error("")
             parser.print_help()
             quit()
-        boundary_parsed = args.boundary[0]
+        with open(Path(args.boundary[0]), "rb") as geojson_file:
+            boundary = geojson_file.read()
+            boundary_parsed = BytesIO(boundary)
     elif len(args.boundary) == 4:
         boundary_parsed = ",".join(args.boundary)
     else:
