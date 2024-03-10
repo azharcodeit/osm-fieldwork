@@ -12,12 +12,12 @@ BoundingBox = Tuple[float, float, float, float]
 """
 Boundary Handlers for Bounding Box (BBOX) Extraction
 
-This module provides classes to extract Bounding Box (BBOX) coordinates from various boundary representations, 
-including GeoJSON files, GeoJSON data, and BBOX strings.
+This module provides classes to extract Bounding Box (BBOX) from various boundary representations,
+including GeoJSON files wrapped in BytesIO object, and BBOX strings.
 
 Classes:
 - BytesIOBoundaryHandler: Extracts BBOX from GeoJSON data stored in a BytesIO object.
-- StringBoundaryHandler: Extracts BBOX from a BBOX string representation.
+- StringBoundaryHandler: Extracts BBOX from string representation.
 """
 class BoundaryHandler:
     def make_bbox(self) -> BoundingBox:

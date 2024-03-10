@@ -5,7 +5,8 @@ from .boundary_handlers import BoundingBox, BytesIOBoundaryHandler, StringBounda
 """
 Boundary Handler Factory
 
-This module provides a factory class for creating boundary handlers based on the type of input boundary provided. It supports boundary inputs represented either as GeoJSON files, GeoJSON data, or BBOX strings.
+This module provides a factory class for creating boundary handlers based on the type of input boundary provided.
+It supports boundary inputs represented either as GeoJSON files wrapped in BytesIO, or BBOX strings.
 
 Classes:
 - BoundaryHandlerFactory: Factory class for creating boundary handlers.
